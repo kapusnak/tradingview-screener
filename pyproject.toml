@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tradingview-screeners"
+version = "0.1.0"
+description = "TradingView screener results to Google Sheets and email (Railway cron)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "tradingview-screener>=3.0",
+    "pandas>=2.0",
+    "gspread>=6.0",
+    "google-auth>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src"]
