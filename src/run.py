@@ -7,6 +7,7 @@ import logging
 import sys
 from collections.abc import Callable
 from datetime import date
+from typing import Optional
 
 import pandas as pd
 
@@ -19,9 +20,8 @@ logger = logging.getLogger(__name__)
 ScreenerFn = Callable[[], tuple[str, pd.DataFrame]]
 
 SCREENER_REGISTRY: list[ScreenerFn] = [
-    screeners.run_us_momentum_screener,
-    screeners.run_us_largecap_volume_screener,
-    screeners.run_us_high_relative_volume_screener,
+    screeners.run_big_volume_screener,
+    screeners.run_ten_percent_up_screener,
 ]
 
 
@@ -67,7 +67,7 @@ def _configure_logging(level_name: str) -> None:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="TradingView screeners → Google Sheets → email")
     parser.add_argument(
         "--dry-run",

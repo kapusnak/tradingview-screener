@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from dotenv import load_dotenv
 
@@ -34,7 +34,7 @@ def _require(name: str) -> str:
     return v
 
 
-def _optional_json(name: str) -> Any | None:
+def _optional_json(name: str) -> Optional[Any]:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return None
@@ -57,11 +57,11 @@ class SmtpSettings:
 @dataclass(frozen=True)
 class Settings:
     google_sheets_id: str
-    google_service_account_json: str | None
-    google_service_account_key_path: str | None
+    google_service_account_json: Optional[str]
+    google_service_account_key_path: Optional[str]
     google_sheet_tab: str
     sheet_layout: SheetLayout
-    tradingview_screeners_json: Any | None
+    tradingview_screeners_json: Optional[Any]
     smtp: SmtpSettings
     log_level: str
     dry_run_env: bool

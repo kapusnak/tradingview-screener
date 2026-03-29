@@ -2,9 +2,27 @@
 
 Small Python service: run TradingView scanner queries, log results to Google Sheets, email an HTML summary. Intended for **Railway cron** (run once, exit).
 
+## Your TradingView screeners vs this script
+
+**This app does not open your saved TradingView screeners** (no link, no login, no “import from my account”). The stock screener you built in the TradingView UI lives in your browser session; TradingView does not give this Python library a simple “fetch screener ID xyz” URL the way you might expect.
+
+What happens instead:
+
+- Each “screener” in this repo is a **Python function** in [`src/screeners.py`](src/screeners.py) that builds a **`Query()`** (market, `.where(...)` filters, `.select(...)` columns, `.order_by`, `.limit`).
+- This project includes **Big Volume** and **10% Up**, defined to mirror your TradingView rules in code (still not loaded from the website).
+
+**How to add or tweak a screener:**
+
+1. In TradingView, **write down every rule** for the new idea.
+2. Map each rule to a **field name** in the [stock field list](https://shner-elmo.github.io/TradingView-Screener/fields/stocks.html).
+3. In `src/screeners.py`, add a function (copy an existing one) with `.set_markets(...)`, `.where(...)`, `.select(...)`, etc.
+4. In [`src/run.py`](src/run.py), append it to **`SCREENER_REGISTRY`**.
+
+If you need the **exact** same results as a complex saved layout and the API fields are not enough, the alternative is heavier: **browser automation** (e.g. Playwright) logged into TradingView — that was explicitly out of scope for v1 of this project.
+
 ## Setup
 
-Use **Python 3.10+** (the Docker image uses 3.12).
+Use **Python 3.9+** locally (the Docker image uses 3.12; **3.10+** is recommended when you can install it).
 
 ```bash
 python -m venv .venv
@@ -70,4 +88,4 @@ Full list with placeholders: [.env.example](.env.example).
 
 ## Customize screeners
 
-Edit `src/screeners.py` and the registry in `src/run.py`. Field names: [TradingView-Screener fields](https://shner-elmo.github.io/TradingView-Screener/fields/stocks.html).
+Edit `src/screeners.py` (the `Query` inside each function) and the **`SCREENER_REGISTRY`** list in `src/run.py`. Field names: [TradingView-Screener fields](https://shner-elmo.github.io/TradingView-Screener/fields/stocks.html).
