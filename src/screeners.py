@@ -24,6 +24,26 @@ logger = logging.getLogger(__name__)
 # Default row cap per query; increase carefully (TradingView may throttle).
 _DEFAULT_LIMIT = 150
 
+# TradingView UI **Market → USA**: ``america`` + scanner ``country`` == United States
+# (domicile, not just listing). Excludes US-listed foreign issuers, e.g. ``NYSE:NOK``
+# (Nokia → Finland) — matching the website vs. ``america``-only (which still lists them).
+_FILTER_MARKET_USA = col("country") == "United States"
+
+# Same output shape for every screener (TradingView column order; ``ticker`` is always
+# first from the API, then renamed to ``symbol`` in ``run.py``). ``name`` is included
+# for readability. Last column is **Industry** (scanner field ``industry``).
+STANDARD_SCANNER_OUTPUT_FIELDS: tuple[str, ...] = (
+    "name",
+    "change",
+    "relative_volume",
+    "Value.Traded",
+    "AvgValue.Traded_60d",
+    "market_cap_basic",
+    "total_revenue_qoq_growth_fq",
+    "total_revenue_yoy_growth_fq",
+    "industry",
+)
+
 # --- "Big Volume" screener (TradingView UI) ---------------------------------
 # Eleven sectors checked in your UI (scanner API uses Title Case on each word).
 BIG_VOLUME_SECTORS: tuple[str, ...] = (
@@ -48,6 +68,10 @@ BIG_VOLUME_SECTORS: tuple[str, ...] = (
 # metric (10‑session calc). Override only if you intentionally want another field.
 BIG_VOLUME_REL_VOLUME_FIELD: str = "relative_volume"
 
+# --- "Weekly 20% Gainers" ----------------------------------------------------
+# Market-cap floor (USD): > 300M, same as your TradingView rule.
+WEEKLY_20PCT_MIN_MARKET_CAP_USD: float = 300_000_000
+
 
 def _run_query(screener_name: str, query: Query) -> tuple[str, pd.DataFrame]:
     """Execute a built Query and return (name, DataFrame)."""
@@ -61,7 +85,7 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
     Mirrors the saved TradingView screener **"Big Volume"** (your screenshots).
 
     UI rules → API fields:
-      - US → ``america`` (full US scanner universe, not a watchlist)
+      - Market USA → ``america`` + ``country`` == ``United States``
       - Price > 5 USD → ``close``
       - Change > 0% → ``change`` (**percent**, not dollars; see module note)
       - Revenue, Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq``
@@ -80,6 +104,7 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
     """
     rel_field = BIG_VOLUME_REL_VOLUME_FIELD
     filters = [
+        _FILTER_MARKET_USA,
         col("close") > 5,
         col("change") > 0,
         col("market_cap_basic") > 300_000_000,
@@ -94,19 +119,7 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
     q = (
         Query()
         .set_markets("america")
-        .select(
-            "name",
-            "close",
-            "change",
-            "volume",
-            "volume_change",
-            "relative_volume",
-            "relative_volume_10d_calc",
-            "market_cap_basic",
-            "total_revenue_qoq_growth_fq",
-            "AvgValue.Traded_30d",
-            "sector",
-        )
+        .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
         .where(*filters)
         .order_by("volume", ascending=False)
         .limit(_DEFAULT_LIMIT)
@@ -116,9 +129,10 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
 
 def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
     """
-    **"10% Up"** (your UI): US, no sector filter, no watchlist.
+    **"10% Up"** (your UI): USA market, no sector filter, no watchlist.
 
     UI → API:
+      - Market USA → ``america`` + ``country`` == ``United States``
       - Price > 5 USD → ``close``
       - Change > 10% → ``change`` > 10 (**percent**; not ``change_abs``)
       - Revenue Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq``
@@ -130,6 +144,7 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
     Strict AND may return zero rows on some days; thresholds are easy to relax below.
     """
     filters = [
+        _FILTER_MARKET_USA,
         col("close") > 5,
         col("change") > 10,
         col("total_revenue_qoq_growth_fq") > 15,
@@ -141,20 +156,79 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
     q = (
         Query()
         .set_markets("america")
-        .select(
-            "name",
-            "close",
-            "change",
-            "volume",
-            "relative_volume",
-            "market_cap_basic",
-            "total_revenue_qoq_growth_fq",
-            "EMA10",
-            "EMA20",
-            "Value.Traded",
-        )
+        .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
         .where(*filters)
         .order_by("change", ascending=False)
         .limit(_DEFAULT_LIMIT)
     )
     return _run_query("10pct_up", q)
+
+
+def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
+    """
+    **"Weekly 20% Gainers"** — USA market, no sector/watchlist in your screenshots.
+
+    UI → API:
+      - Market USA → ``america`` + ``country`` == ``United States``
+      - Price ≥ 5 USD → ``close`` >= 5
+      - Price × Average Volume 30 days > 100M USD → ``AvgValue.Traded_30d`` > 100M
+      - Market cap > 300M USD → ``market_cap_basic`` > ``WEEKLY_20PCT_MIN_MARKET_CAP_USD`` (300M)
+      - Performance % 1 week > 20% → ``Perf.W`` > 20 (weekly performance %)
+    """
+    mc_min = WEEKLY_20PCT_MIN_MARKET_CAP_USD
+    filters = [
+        _FILTER_MARKET_USA,
+        col("close") >= 5,
+        col("AvgValue.Traded_30d") > 100_000_000,
+        col("market_cap_basic") > mc_min,
+        col("Perf.W") > 20,
+    ]
+    q = (
+        Query()
+        .set_markets("america")
+        .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
+        .where(*filters)
+        .order_by("Perf.W", ascending=False)
+        .limit(_DEFAULT_LIMIT)
+    )
+    return _run_query("weekly_20pct_gainers", q)
+
+
+def run_pullback_strong_trend_screener() -> tuple[str, pd.DataFrame]:
+    """
+    **"Pullback in strong trend"** (your UI): USA market, liquid names in an uptrend
+    with a short-term dip under the 10 EMA.
+
+    UI → API:
+      - Market USA → ``america`` + ``country`` == ``United States``
+      - Price > 5 USD → ``close`` > 5
+      - Market cap ≥ 300M USD → ``market_cap_basic`` >= 300_000_000
+      - Price × Vol > 100M USD → ``Value.Traded`` > 100M (1D dollar volume)
+      - Revenue Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq`` > 15
+      - EMA(20) < EMA(10) → ``EMA20`` < ``EMA10`` (``col()`` comparison)
+      - EMA(10) > Price → ``EMA10`` > ``close`` (pullback under 10 EMA)
+      - SMA(50) < Price → ``SMA50`` < ``close``
+      - SMA(200) < Price → ``SMA200`` < ``close``
+      - SMA(50) below price by ≥ 5% → ``close.above_pct('SMA50', 1.05)``
+    """
+    filters = [
+        _FILTER_MARKET_USA,
+        col("close") > 5,
+        col("market_cap_basic") >= 300_000_000,
+        col("Value.Traded") > 100_000_000,
+        col("total_revenue_qoq_growth_fq") > 15,
+        col("EMA20") < col("EMA10"),
+        col("EMA10") > col("close"),
+        col("SMA50") < col("close"),
+        col("SMA200") < col("close"),
+        col("close").above_pct("SMA50", 1.05),
+    ]
+    q = (
+        Query()
+        .set_markets("america")
+        .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
+        .where(*filters)
+        .order_by("volume", ascending=False)
+        .limit(_DEFAULT_LIMIT)
+    )
+    return _run_query("pullback_strong_trend", q)

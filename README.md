@@ -9,7 +9,7 @@ Small Python service: run TradingView scanner queries, log results to Google She
 What happens instead:
 
 - Each “screener” in this repo is a **Python function** in [`src/screeners.py`](src/screeners.py) that builds a **`Query()`** (market, `.where(...)` filters, `.select(...)` columns, `.order_by`, `.limit`).
-- This project includes **Big Volume** and **10% Up**, defined to mirror your TradingView rules in code (still not loaded from the website).
+- This project includes **Big Volume**, **10% Up**, **Weekly 20% Gainers**, and **Pullback in strong trend**, defined in code to mirror your TradingView rules (still not loaded from the website).
 
 **How to add or tweak a screener:**
 

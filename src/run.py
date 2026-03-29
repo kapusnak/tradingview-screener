@@ -22,6 +22,8 @@ ScreenerFn = Callable[[], tuple[str, pd.DataFrame]]
 SCREENER_REGISTRY: list[ScreenerFn] = [
     screeners.run_big_volume_screener,
     screeners.run_ten_percent_up_screener,
+    screeners.run_weekly_20pct_gainers_screener,
+    screeners.run_pullback_strong_trend_screener,
 ]
 
 
@@ -41,21 +43,54 @@ def build_combined_dataframe(run_date: str, results: list[tuple[str, pd.DataFram
     if not pieces:
         return pd.DataFrame()
 
-    out = pd.concat(pieces, ignore_index=True)
+    non_empty = [p for p in pieces if not p.empty]
+    if not non_empty:
+        return pd.DataFrame()
+
+    out = pd.concat(non_empty, ignore_index=True)
     out.insert(0, "run_date", run_date)
 
     preferred = [
         "run_date",
         "screener_name",
         "symbol",
-        "name",
-        "close",
-        "volume",
-        "market_cap_basic",
+        *screeners.STANDARD_SCANNER_OUTPUT_FIELDS,
     ]
     rest = [c for c in out.columns if c not in preferred]
     ordered = [c for c in preferred if c in out.columns] + rest
     return out[ordered]
+
+
+def _print_dry_run_summary(run_date: str, results: list[tuple[str, pd.DataFrame]]) -> None:
+    """Readable stdout summary (one block per screener)."""
+    width = 72
+    line = "=" * width
+    print()
+    print(line)
+    print(f"  DRY RUN SUMMARY    run_date={run_date}")
+    print(line)
+
+    total_rows = 0
+    for screener_name, df in results:
+        n = len(df)
+        total_rows += n
+        print(f"\n  {screener_name}    {n} row(s)")
+        print("  " + "-" * (width - 4))
+        if df.empty:
+            print("  (no matches)")
+            continue
+        sym = "symbol" if "symbol" in df.columns else "ticker"
+        want = [sym, *screeners.STANDARD_SCANNER_OUTPUT_FIELDS]
+        show = [c for c in want if c in df.columns]
+        tbl = df[show].to_string(index=False, max_rows=20)
+        for tbl_line in tbl.splitlines():
+            print(f"  {tbl_line}")
+
+    print()
+    print("  " + "-" * (width - 4))
+    print(f"  Total rows (all screeners): {total_rows}")
+    print(line)
+    print()
 
 
 def _configure_logging(level_name: str) -> None:
@@ -99,7 +134,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.info("Combined rows: %s", len(combined))
 
         if dry_run:
-            logger.info("Dry run — preview:\n%s", combined.head(15).to_string())
+            _print_dry_run_summary(run_date, results)
             return 0
 
         sheet_client.write_dataframe(settings, combined, run_date)

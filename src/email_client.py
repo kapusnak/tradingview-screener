@@ -25,7 +25,7 @@ def build_html_summary(
     df: pd.DataFrame,
     max_tickers_per_group: int = 50,
 ) -> str:
-    """Build HTML body: per-screener ticker lists with close and volume."""
+    """Build HTML body: per-screener ticker lists with change % and rel volume when present."""
     lines: list[str] = [
         "<html><body>",
         f"<p>Run date: <strong>{html.escape(run_date)}</strong></p>",
@@ -48,11 +48,15 @@ def build_html_summary(
         for _, row in sub.iterrows():
             sym = row.get(sym_col, "")
             nm = row.get("name", "")
-            close = row.get("close", "")
-            vol = row.get("volume", "")
+            chg = row.get("change", "")
+            relv = row.get("relative_volume", "")
+            if pd.isna(chg):
+                chg = ""
+            if pd.isna(relv):
+                relv = ""
             extra = ""
-            if close != "" or vol != "":
-                extra = f" — close {close}, vol {vol}"
+            if chg != "" or relv != "":
+                extra = f" — chg% {chg}, rel vol {relv}"
             lines.append(
                 f"<li>{html.escape(str(sym))} ({html.escape(str(nm))})"
                 f"{html.escape(extra)}</li>"
