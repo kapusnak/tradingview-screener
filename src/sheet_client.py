@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Sequence
+from datetime import date
+from typing import Any, Optional, Sequence
 
 import gspread
 import pandas as pd
@@ -39,17 +40,35 @@ def _ensure_worksheet(sh: gspread.Spreadsheet, title: str, rows: int = 2000, col
         return sh.add_worksheet(title=title, rows=str(rows), cols=str(cols))
 
 
+def _parse_run_date_cell(cell: str) -> Optional[date]:
+    """Parse ISO (YYYY-MM-DD) or European (D.M.YYYY) run_date cell values."""
+    s = cell.strip()
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        pass
+    parts = s.split(".")
+    if len(parts) == 3:
+        try:
+            d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+            return date(y, m, d)
+        except ValueError:
+            return None
+    return None
+
+
 def _delete_rows_matching_run_date(
     ws: gspread.Worksheet,
-    run_date: str,
+    run_day: date,
     *,
     run_date_col: int = 0,
 ) -> None:
     """
-    Idempotency for Pattern A: remove data rows (not header) where run_date matches.
+    Idempotency for Pattern A: remove data rows (not header) where run_date matches run_day.
 
-    Assumes first row is header and column index run_date_col holds run_date (ISO string).
-    Deletes from highest row index downward so indices stay valid.
+    Accepts cells as ISO or European D.M.YYYY. Deletes from highest row index downward.
     """
     values = ws.get_all_values()
     if len(values) <= 1:
@@ -62,7 +81,8 @@ def _delete_rows_matching_run_date(
     for i, row in enumerate(values[1:], start=2):  # 1-based sheet rows; skip header
         if len(row) <= run_date_col:
             continue
-        if row[run_date_col].strip() == run_date:
+        parsed = _parse_run_date_cell(row[run_date_col])
+        if parsed == run_day:
             to_delete.append(i)
     for row_idx in sorted(to_delete, reverse=True):
         ws.delete_rows(row_idx)
@@ -86,13 +106,13 @@ def _write_headers_if_needed(ws: gspread.Worksheet, columns: Sequence[str]) -> N
 def write_dataframe_log_tab(
     settings: Settings,
     df: pd.DataFrame,
-    run_date: str,
+    run_day: date,
 ) -> None:
     """
     Pattern A: single worksheet (settings.google_sheet_tab).
 
-    Before append, delete all rows whose run_date column equals this run's date (same calendar
-    day re-run replaces that slice; no duplicate rows for the day).
+    Before append, delete all rows whose run_date column is the same calendar day (ISO or
+    European D.M.YYYY in cells; same-day re-run replaces that slice).
     """
     if df.empty:
         logger.warning("Empty DataFrame; nothing to write to sheet")
@@ -108,7 +128,7 @@ def write_dataframe_log_tab(
         logger.warning("Expected first column 'run_date' for idempotent delete; found %r", columns[0])
 
     _write_headers_if_needed(ws, columns)
-    _delete_rows_matching_run_date(ws, run_date, run_date_col=0)
+    _delete_rows_matching_run_date(ws, run_day, run_date_col=0)
 
     records = df.astype(object).where(pd.notna(df), "").values.tolist()
     rows = [[_cell_str(v) for v in row] for row in records]
@@ -128,7 +148,7 @@ def _cell_str(v: Any) -> str:
 def write_dataframe_daily_tab(
     settings: Settings,
     df: pd.DataFrame,
-    run_date: str,
+    run_day: date,
 ) -> None:
     """
     Pattern B: worksheet title = run_date (YYYY-MM-DD). Full replace: clear body and rewrite.
@@ -139,9 +159,10 @@ def write_dataframe_daily_tab(
         logger.warning("Empty DataFrame; nothing to write to daily sheet")
         return
 
+    tab_title = run_day.isoformat()
     gc = _gspread_client(settings)
     sh = gc.open_by_key(settings.google_sheets_id)
-    ws = _ensure_worksheet(sh, run_date)
+    ws = _ensure_worksheet(sh, tab_title)
 
     columns = list(df.columns)
     ws.clear()
@@ -150,11 +171,11 @@ def write_dataframe_daily_tab(
     rows = [[_cell_str(v) for v in row] for row in records]
     if rows:
         ws.append_rows(rows, value_input_option="USER_ENTERED")
-    logger.info("Wrote %s rows to daily worksheet %r", len(rows), run_date)
+    logger.info("Wrote %s rows to daily worksheet %r", len(rows), tab_title)
 
 
-def write_dataframe(settings: Settings, df: pd.DataFrame, run_date: str) -> None:
+def write_dataframe(settings: Settings, df: pd.DataFrame, run_day: date) -> None:
     if settings.sheet_layout == "daily":
-        write_dataframe_daily_tab(settings, df, run_date)
+        write_dataframe_daily_tab(settings, df, run_day)
     else:
-        write_dataframe_log_tab(settings, df, run_date)
+        write_dataframe_log_tab(settings, df, run_day)

@@ -125,8 +125,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             type(settings.tradingview_screeners_json).__name__,
         )
 
-    run_date = date.today().isoformat()
-    logger.info("Starting run for run_date=%s dry_run=%s", run_date, dry_run)
+    run_day = date.today()
+    run_date = f"{run_day.day}.{run_day.month}.{run_day.year}"
+    logger.info("Starting run for run_date=%s dry_run=%s", run_day.isoformat(), dry_run)
 
     try:
         results: list[tuple[str, pd.DataFrame]] = []
@@ -142,7 +143,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
 
         if settings.sheets_enabled:
-            sheet_client.write_dataframe(settings, combined, run_date)
+            sheet_client.write_dataframe(settings, combined, run_day)
         if settings.smtp is not None:
             email_client.send_screener_summary_html(
                 run_date=run_date,
