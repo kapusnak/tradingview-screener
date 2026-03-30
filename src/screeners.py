@@ -13,6 +13,9 @@ library's field list, and register it in ``src/run.py``.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 from tradingview_screener import Query, col
 
@@ -68,9 +71,17 @@ BIG_VOLUME_SECTORS: tuple[str, ...] = (
 # metric (10‑session calc). Override only if you intentionally want another field.
 BIG_VOLUME_REL_VOLUME_FIELD: str = "relative_volume"
 
-# --- "Weekly 20% Gainers" ----------------------------------------------------
+# --- "Weekly 20% Gainers" (Fri–Sun only) --------------------------------------
 # Market-cap floor (USD): > 300M, same as your TradingView rule.
 WEEKLY_20PCT_MIN_MARKET_CAP_USD: float = 300_000_000
+# Only run this screener Fri–Sun in Central Europe (Prague) time (Mon–Thu → empty, no API call).
+WEEKLY_20PCT_CALENDAR_TZ = ZoneInfo("Europe/Prague")
+
+
+def _is_weekly_20pct_screener_active_day() -> bool:
+    """True on Friday, Saturday, or Sunday in ``WEEKLY_20PCT_CALENDAR_TZ`` (Prague)."""
+    cal_date = datetime.now(WEEKLY_20PCT_CALENDAR_TZ).date()
+    return cal_date.weekday() in (4, 5, 6)
 
 
 def _run_query(screener_name: str, query: Query) -> tuple[str, pd.DataFrame]:
@@ -166,21 +177,36 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
 
 def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     """
-    **"Weekly 20% Gainers"** — USA market, no sector/watchlist in your screenshots.
+    **"Weekly 20% Gainers"** — only queried on **Friday, Saturday, or Sunday** (Europe/Prague).
 
-    UI → API:
+    **Monday–Thursday** on that calendar returns an empty DataFrame (no API call). Uses
+    ``datetime.now(WEEKLY_20PCT_CALENDAR_TZ)`` so the script uses the **local date in Prague**
+    (CET/CEST); you can add a **time-of-day** cutoff if you want stricter behavior.
+
+    UI → API (aligned with your liquidity / fundamental filters; weekly performance is ``Perf.W``):
       - Market USA → ``america`` + ``country`` == ``United States``
       - Price ≥ 5 USD → ``close`` >= 5
       - Price × Average Volume 30 days > 100M USD → ``AvgValue.Traded_30d`` > 100M
       - Market cap > 300M USD → ``market_cap_basic`` > ``WEEKLY_20PCT_MIN_MARKET_CAP_USD`` (300M)
-      - Performance % 1 week > 20% → ``Perf.W`` > 20 (weekly performance %)
+      - Revenue growth Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq`` > 15
+      - Performance % 1 week > 20% → ``Perf.W`` > 20
     """
+    if not _is_weekly_20pct_screener_active_day():
+        now_local = datetime.now(WEEKLY_20PCT_CALENDAR_TZ)
+        logger.info(
+            "Screener weekly_20pct_gainers: skipped (runs only Fri–Sun Europe/Prague); now=%s weekday=%s",
+            now_local.strftime("%Y-%m-%d %H:%M %Z"),
+            now_local.date().weekday(),
+        )
+        return "weekly_20pct_gainers", pd.DataFrame()
+
     mc_min = WEEKLY_20PCT_MIN_MARKET_CAP_USD
     filters = [
         _FILTER_MARKET_USA,
         col("close") >= 5,
         col("AvgValue.Traded_30d") > 100_000_000,
         col("market_cap_basic") > mc_min,
+        col("total_revenue_qoq_growth_fq") > 15,
         col("Perf.W") > 20,
     ]
     q = (
