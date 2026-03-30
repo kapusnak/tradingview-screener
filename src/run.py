@@ -1,4 +1,4 @@
-"""Entry point: run all screeners, log to Sheets, send email."""
+"""Entry point: run all screeners; optional Sheets, email, Telegram."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Optional
 
 import pandas as pd
 
-from src import email_client, screeners, sheet_client
+from src import email_client, screeners, sheet_client, telegram_client
 from src.config import dry_run_from_environment, load_settings
 
 logger = logging.getLogger(__name__)
@@ -103,11 +103,13 @@ def _configure_logging(level_name: str) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="TradingView screeners → Google Sheets → email")
+    parser = argparse.ArgumentParser(
+        description="TradingView screeners → optional Google Sheets, email, Telegram",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Fetch screeners only; skip Google Sheets and email",
+        help="Fetch screeners only; skip Sheets, email, and Telegram",
     )
     args = parser.parse_args(argv)
 
@@ -137,13 +139,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             _print_dry_run_summary(run_date, results)
             return 0
 
-        sheet_client.write_dataframe(settings, combined, run_date)
-        email_client.send_screener_summary_html(
-            run_date=run_date,
-            sheet_id=settings.google_sheets_id,
-            df=combined,
-            smtp_settings=settings.smtp,
-        )
+        if settings.sheets_enabled:
+            sheet_client.write_dataframe(settings, combined, run_date)
+        if settings.smtp is not None:
+            email_client.send_screener_summary_html(
+                run_date=run_date,
+                sheet_id=settings.google_sheets_id or "",
+                df=combined,
+                smtp_settings=settings.smtp,
+            )
+        if settings.telegram is not None:
+            telegram_client.send_screener_summary(
+                telegram=settings.telegram,
+                run_date=run_date,
+                results=results,
+            )
     except Exception:
         logger.exception("Run failed")
         return 1

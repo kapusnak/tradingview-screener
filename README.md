@@ -1,6 +1,6 @@
-# TradingView screeners → Google Sheets → email
+# TradingView screeners → Google Sheets / email / Telegram
 
-Small Python service: run TradingView scanner queries, log results to Google Sheets, email an HTML summary. Intended for **Railway cron** (run once, exit).
+Small Python service: run TradingView scanner queries, then send results to **Google Sheets**, **SMTP email**, and/or **Telegram** (configure at least one). Intended for **Railway cron** (run once, exit).
 
 ## Your TradingView screeners vs this script
 
@@ -49,35 +49,52 @@ Copy `.env.example` to `.env` and fill values.
 python -m src.run
 ```
 
-Dry run (no Sheets, no email):
+Dry run (no Sheets, email, or Telegram):
 
 ```bash
 python -m src.run --dry-run
 ```
 
+## Telegram (bot + chat ID)
+
+1. Open Telegram, search **[@BotFather](https://t.me/BotFather)**, send `/newbot`, follow prompts, and copy the **HTTP API token** (looks like `123456:ABC...`).
+2. Start a chat with your new bot (press **Start**). For a **private DM**, your **chat ID** is often your numeric user ID. Easiest ways to get it:
+   - Message **[@userinfobot](https://t.me/userinfobot)** and read `Id`, or
+   - Call `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser **after** you sent any message to the bot; look for `"chat":{"id": ...}`.
+3. Set environment variables:
+   - `TELEGRAM_BOT_TOKEN` — the token from BotFather
+   - `TELEGRAM_CHAT_ID` — the numeric ID (string is fine, e.g. `-1001234567890` for some groups)
+
+**Groups:** Add the bot to the group and send a message mentioning the bot (or any message if privacy mode allows). Use `getUpdates` to read the group `chat.id`.
+
+You can run **Telegram only** (leave Google and SMTP empty) as long as both Telegram vars are set.
+
 ## Environment variables
 
-| Variable | Required (normal run) | Description |
-|----------|-------------------------|-------------|
-| `GOOGLE_SHEETS_ID` | yes | Spreadsheet ID from the URL |
+For a **normal** run you need **at least one** of: Sheets (ID + service account), full SMTP block, or Telegram (token + chat ID).
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_SHEETS_ID` | with Sheets | Spreadsheet ID from the URL |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | one of JSON/path | Service account key JSON as a single-line string |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` | one of JSON/path | Path to the JSON key file (local/Docker volume) |
 | `GOOGLE_SHEET_TAB` | no | Log worksheet name (default `log`) |
 | `SHEET_LAYOUT` | no | `log` (default) or `daily` (one tab per `YYYY-MM-DD`) |
-| `EMAIL_SMTP_HOST` / `PORT` / `USER` / `PASS` | yes | SMTP settings |
-| `EMAIL_FROM` / `EMAIL_TO` | yes | Envelope addresses |
+| `EMAIL_SMTP_HOST` / `PORT` / `USER` / `PASS` | with email | SMTP settings (host defaults to `smtp.gmail.com` if others set) |
+| `EMAIL_FROM` / `EMAIL_TO` | with email | Envelope addresses |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | with Telegram | Bot token and destination chat |
 | `TRADINGVIEW_SCREENERS` | no | Optional JSON for future dynamic screeners |
 | `LOG_LEVEL` | no | e.g. `INFO`, `DEBUG` |
-| `DRY_RUN` | no | `1` / `true` skips Sheets and email (like `--dry-run`) |
+| `DRY_RUN` | no | `1` / `true` skips all outputs (like `--dry-run`) |
 
 Full list with placeholders: [.env.example](.env.example).
 
 ## Railway
 
 1. Create a **new project** and deploy using the repo root (Dockerfile builds the app and runs `python -m src.run`).
-2. In **Variables**, add every secret from `.env.example` (for `GOOGLE_SERVICE_ACCOUNT_JSON`, paste the full JSON; Railway stores it as one variable).
+2. In **Variables**, add the secrets you use (e.g. Telegram only: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`). For Google, paste the full JSON into `GOOGLE_SERVICE_ACCOUNT_JSON`.
 3. Add a **Cron** service or scheduled job (per Railway’s current UI): same image, schedule e.g. daily, start command **`python -m src.run`** (already the Dockerfile `CMD`; override only if you use a different entry).
-4. Optional: set `DRY_RUN=1` once to verify the container starts without touching Sheets or SMTP.
+4. Optional: set `DRY_RUN=1` once to verify the container starts without writing to any output channel.
 
 ## Troubleshooting
 

@@ -29,9 +29,14 @@ def build_html_summary(
     lines: list[str] = [
         "<html><body>",
         f"<p>Run date: <strong>{html.escape(run_date)}</strong></p>",
-        f'<p>Sheet: <a href="{html.escape(_sheet_url(sheet_id))}">Open Google Sheet</a></p>',
-        "<hr/>",
     ]
+    if sheet_id.strip():
+        lines.append(
+            f'<p>Sheet: <a href="{html.escape(_sheet_url(sheet_id))}">Open Google Sheet</a></p>'
+        )
+    else:
+        lines.append("<p>Sheet: not configured for this run.</p>")
+    lines.extend(["<hr/>"])
     if df.empty:
         lines.append("<p>No rows in this run.</p></body></html>")
         return "\n".join(lines)
