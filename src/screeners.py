@@ -84,6 +84,18 @@ def _is_weekly_20pct_screener_active_day() -> bool:
     return cal_date.weekday() in (4, 5, 6)
 
 
+def include_screener_in_text_summary(internal_name: str, df: pd.DataFrame) -> bool:
+    """
+    Whether Telegram / dry-run should show this screener at all (title + body).
+
+    Weekly 20% Gainers is hidden on Mon–Thu Prague when it did not run (empty). On Fri–Sun
+    it is always shown, including an empty \"No matches\" block after a real query.
+    """
+    if internal_name != "weekly_20pct_gainers":
+        return True
+    return _is_weekly_20pct_screener_active_day() or not df.empty
+
+
 def _run_query(screener_name: str, query: Query) -> tuple[str, pd.DataFrame]:
     """Execute a built Query and return (name, DataFrame)."""
     total, df = query.get_scanner_data()

@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, List
 
 import pandas as pd
 
+from src import screeners
+
 if TYPE_CHECKING:
     from src.config import TelegramSettings
 
@@ -83,6 +85,8 @@ def format_results_telegram_html(run_date: str, results: list[tuple[str, pd.Data
     ]
     total = 0
     for internal_name, df in results:
+        if not screeners.include_screener_in_text_summary(internal_name, df):
+            continue
         total += len(df)
         title = html.escape(screener_display_name(internal_name))
         lines.append(f"<b>{title}</b>")

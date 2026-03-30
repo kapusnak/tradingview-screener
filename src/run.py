@@ -72,6 +72,8 @@ def _print_dry_run_summary(run_date: str, results: list[tuple[str, pd.DataFrame]
 
     total_rows = 0
     for screener_name, df in results:
+        if not screeners.include_screener_in_text_summary(screener_name, df):
+            continue
         n = len(df)
         total_rows += n
         print(f"\n  {screener_name}    {n} row(s)")
