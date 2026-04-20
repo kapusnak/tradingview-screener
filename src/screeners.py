@@ -27,10 +27,9 @@ logger = logging.getLogger(__name__)
 # Default row cap per query; increase carefully (TradingView may throttle).
 _DEFAULT_LIMIT = 150
 
-# TradingView UI **Market → USA**: ``america`` + scanner ``country`` == United States
-# (domicile, not just listing). Excludes US-listed foreign issuers, e.g. ``NYSE:NOK``
-# (Nokia → Finland) — matching the website vs. ``america``-only (which still lists them).
-_FILTER_MARKET_USA = col("country") == "United States"
+# TradingView UI **Market → USA**: use ``set_markets("america")`` only. Do **not** filter
+# ``country == "United States"``: the UI means US-listed names; the API’s ``country`` is
+# issuer domicile, so a strict US filter drops symbols the UI still shows (e.g. some ADRs).
 
 # Same output shape for every screener (TradingView column order; ``ticker`` is always
 # first from the API, then renamed to ``symbol`` in ``run.py``). ``name`` is included
@@ -63,13 +62,17 @@ BIG_VOLUME_SECTORS: tuple[str, ...] = (
     "Transportation",
 )
 
-# Universe: all US stocks in ``america`` that pass the filters below (plus sector list).
+# Universe: ``america`` market symbols that pass the filters below (plus sector list).
 # Optional: restrict to explicit symbols with ``Query().set_tickers("NASDAQ:AAPL", ...)``.
 
 # Relative Volume in UI: timeframe “1 day”, Above, 2.5 → scanner field ``relative_volume``
 # (daily rel vol). Do not use ``relative_volume_10d_calc`` for that — it is a different
 # metric (10‑session calc). Override only if you intentionally want another field.
 BIG_VOLUME_REL_VOLUME_FIELD: str = "relative_volume"
+
+# UI table is sorted by **Rel Volume** (desc). Sorting by raw ``volume`` (shares) surfaces
+# mega‑caps first and can push high‑rel‑vol names like CHYM past ``limit`` even though they match.
+BIG_VOLUME_RESULT_LIMIT: int = 500
 
 # --- "Weekly 20% Gainers" (Fri–Sun only) --------------------------------------
 # Market-cap floor (USD): > 300M, same as your TradingView rule.
@@ -108,7 +111,7 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
     Mirrors the saved TradingView screener **"Big Volume"** (your screenshots).
 
     UI rules → API fields:
-      - Market USA → ``america`` + ``country`` == ``United States``
+      - Market USA → ``america`` only (``set_markets("america")``; no ``country`` filter)
       - Price > 5 USD → ``close``
       - Change > 0% → ``change`` (**percent**, not dollars; see module note)
       - Revenue, Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq``
@@ -119,6 +122,9 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
       - Rel Volume, **1 day**, > 2.5 → ``relative_volume`` (``BIG_VOLUME_REL_VOLUME_FIELD``)
       - “Volume Change % 1 day” > 30% → ``volume_change`` (1D)
 
+    **Sort / cap:** same as typical UI view — order by ``relative_volume`` descending (not share
+    ``volume``), with ``BIG_VOLUME_RESULT_LIMIT`` rows so matches are not truncated early.
+
     **Sectors:** the 11 checked sectors in your UI are in ``BIG_VOLUME_SECTORS``
     (Title Case as returned by the API).
 
@@ -127,7 +133,6 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
     """
     rel_field = BIG_VOLUME_REL_VOLUME_FIELD
     filters = [
-        _FILTER_MARKET_USA,
         col("close") > 5,
         col("change") > 0,
         col("market_cap_basic") > 300_000_000,
@@ -144,8 +149,8 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
         .set_markets("america")
         .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
         .where(*filters)
-        .order_by("volume", ascending=False)
-        .limit(_DEFAULT_LIMIT)
+        .order_by(rel_field, ascending=False)
+        .limit(BIG_VOLUME_RESULT_LIMIT)
     )
     return _run_query("big_volume", q)
 
@@ -155,7 +160,7 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
     **"10% Up"** (your UI): USA market, no sector filter, no watchlist.
 
     UI → API:
-      - Market USA → ``america`` + ``country`` == ``United States``
+      - Market USA → ``america`` only (no ``country`` filter)
       - Price > 5 USD → ``close``
       - Change > 10% → ``change`` > 10 (**percent**; not ``change_abs``)
       - Revenue Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq``
@@ -167,7 +172,6 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
     Strict AND may return zero rows on some days; thresholds are easy to relax below.
     """
     filters = [
-        _FILTER_MARKET_USA,
         col("close") > 5,
         col("change") > 10,
         col("total_revenue_qoq_growth_fq") > 15,
@@ -196,7 +200,7 @@ def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     (CET/CEST); you can add a **time-of-day** cutoff if you want stricter behavior.
 
     UI → API (aligned with your liquidity / fundamental filters; weekly performance is ``Perf.W``):
-      - Market USA → ``america`` + ``country`` == ``United States``
+      - Market USA → ``america`` only (no ``country`` filter)
       - Price ≥ 5 USD → ``close`` >= 5
       - Price × Average Volume 30 days > 100M USD → ``AvgValue.Traded_30d`` > 100M
       - Market cap > 300M USD → ``market_cap_basic`` > ``WEEKLY_20PCT_MIN_MARKET_CAP_USD`` (300M)
@@ -214,7 +218,6 @@ def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
 
     mc_min = WEEKLY_20PCT_MIN_MARKET_CAP_USD
     filters = [
-        _FILTER_MARKET_USA,
         col("close") >= 5,
         col("AvgValue.Traded_30d") > 100_000_000,
         col("market_cap_basic") > mc_min,
@@ -238,7 +241,7 @@ def run_pullback_strong_trend_screener() -> tuple[str, pd.DataFrame]:
     with a short-term dip under the 10 EMA.
 
     UI → API:
-      - Market USA → ``america`` + ``country`` == ``United States``
+      - Market USA → ``america`` only (no ``country`` filter)
       - Price > 5 USD → ``close`` > 5
       - Market cap ≥ 300M USD → ``market_cap_basic`` >= 300_000_000
       - Price × Vol > 100M USD → ``Value.Traded`` > 100M (1D dollar volume)
@@ -250,7 +253,6 @@ def run_pullback_strong_trend_screener() -> tuple[str, pd.DataFrame]:
       - SMA(50) below price by ≥ 5% → ``close.above_pct('SMA50', 1.05)``
     """
     filters = [
-        _FILTER_MARKET_USA,
         col("close") > 5,
         col("market_cap_basic") >= 300_000_000,
         col("Value.Traded") > 100_000_000,
