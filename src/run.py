@@ -23,7 +23,7 @@ SCREENER_REGISTRY: list[ScreenerFn] = [
     screeners.run_big_volume_screener,
     screeners.run_ten_percent_up_screener,
     screeners.run_weekly_20pct_gainers_screener,
-    screeners.run_pullback_strong_trend_screener,
+    screeners.run_strong_fresh_names_screener,
 ]
 
 

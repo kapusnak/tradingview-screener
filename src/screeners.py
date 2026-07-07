@@ -235,40 +235,45 @@ def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     return _run_query("weekly_20pct_gainers", q)
 
 
-def run_pullback_strong_trend_screener() -> tuple[str, pd.DataFrame]:
+def run_strong_fresh_names_screener() -> tuple[str, pd.DataFrame]:
     """
-    **"Pullback in strong trend"** (your UI): USA market, liquid names in an uptrend
-    with a short-term dip under the 10 EMA.
+    **"Strong Fresh Names"** (from your screenshot): US-listed names with recent IPOs,
+    strong quarterly growth, price above short/medium trend filters, and high daily liquidity.
 
     UI → API:
       - Market USA → ``america`` only (no ``country`` filter)
-      - Price > 5 USD → ``close`` > 5
-      - Market cap ≥ 300M USD → ``market_cap_basic`` >= 300_000_000
-      - Price × Vol > 100M USD → ``Value.Traded`` > 100M (1D dollar volume)
-      - Revenue Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq`` > 15
-      - EMA(20) < EMA(10) → ``EMA20`` < ``EMA10`` (``col()`` comparison)
-      - EMA(10) > Price → ``EMA10`` > ``close`` (pullback under 10 EMA)
+      - Chg from open > 0% → ``change_from_open`` > 0
+      - IPO offer date Past 3 years → ``IPODate`` within the last 3 years
+      - Price > 10 USD → ``close`` > 10
+      - Market cap > 2B USD → ``market_cap_basic`` > 2_000_000_000
+      - Revenue growth, Quarterly YoY > 19% → ``total_revenue_yoy_growth_fq`` > 19
       - SMA(50) < Price → ``SMA50`` < ``close``
-      - SMA(200) < Price → ``SMA200`` < ``close``
-      - SMA(50) below price by ≥ 5% → ``close.above_pct('SMA50', 1.05)``
+      - SMA(20) < Price → ``SMA20`` < ``close``
+      - SMA(20) > SMA(50) → ``SMA20`` > ``SMA50``
+      - EMA(10) < Price → ``EMA10`` < ``close``
+      - Avg vol, 10D > 500K → ``average_volume_10d_calc`` > 500_000
+
+    Sort like the screenshot request: ``relative_volume`` descending for the current day.
     """
+    three_years_ago = pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.DateOffset(years=3)
     filters = [
-        col("close") > 5,
-        col("market_cap_basic") >= 300_000_000,
-        col("Value.Traded") > 100_000_000,
-        col("total_revenue_qoq_growth_fq") > 15,
-        col("EMA20") < col("EMA10"),
-        col("EMA10") > col("close"),
+        col("change_from_open") > 0,
+        col("IPODate") >= three_years_ago.to_pydatetime(),
+        col("close") > 10,
+        col("market_cap_basic") > 2_000_000_000,
+        col("total_revenue_yoy_growth_fq") > 19,
         col("SMA50") < col("close"),
-        col("SMA200") < col("close"),
-        col("close").above_pct("SMA50", 1.05),
+        col("SMA20") < col("close"),
+        col("SMA20") > col("SMA50"),
+        col("EMA10") < col("close"),
+        col("average_volume_10d_calc") > 500_000,
     ]
     q = (
         Query()
         .set_markets("america")
         .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
         .where(*filters)
-        .order_by("volume", ascending=False)
+        .order_by("relative_volume", ascending=False)
         .limit(_DEFAULT_LIMIT)
     )
-    return _run_query("pullback_strong_trend", q)
+    return _run_query("strong_fresh_names", q)
