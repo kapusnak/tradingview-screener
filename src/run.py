@@ -153,11 +153,14 @@ def main(argv: Optional[list[str]] = None) -> int:
                 smtp_settings=settings.smtp,
             )
         if settings.telegram is not None:
-            telegram_client.send_screener_summary(
-                telegram=settings.telegram,
-                run_date=run_date,
-                results=results,
-            )
+            if screeners.is_weekday_in_prague():
+                telegram_client.send_screener_summary(
+                    telegram=settings.telegram,
+                    run_date=run_date,
+                    results=results,
+                )
+            else:
+                logger.info("Telegram skipped (weekdays only, Europe/Prague)")
     except Exception:
         logger.exception("Run failed")
         return 1

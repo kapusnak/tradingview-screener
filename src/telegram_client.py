@@ -61,17 +61,28 @@ def _fmt_rel_vol(value: object) -> str:
         return "—"
 
 
-def _pre_table_lines(df: pd.DataFrame, sym_col: str) -> list[str]:
-    """Monospace table: Ticker | Chg % | Rel vol (one data row per line)."""
-    w_sym, w_chg, w_rel = 10, 10, 8
-    header = f"{'Ticker':<{w_sym}}{'Chg %':>{w_chg}}{'Rel vol':>{w_rel}}"
+# Per-screener change column: (scanner field, Telegram header).
+_SCREENER_CHG_COLUMN: dict[str, tuple[str, str]] = {
+    "weekly_20pct_gainers": ("Perf.W", "W Chg %"),
+}
+
+
+def _chg_column_for_screener(internal_name: str) -> tuple[str, str]:
+    return _SCREENER_CHG_COLUMN.get(internal_name, ("change", "Chg %"))
+
+
+def _pre_table_lines(df: pd.DataFrame, sym_col: str, *, internal_name: str) -> list[str]:
+    """Monospace table: Ticker | Chg % (or W Chg %) | Rel vol (one data row per line)."""
+    chg_field, chg_header = _chg_column_for_screener(internal_name)
+    w_sym, w_chg, w_rel = 10, max(10, len(chg_header)), 8
+    header = f"{'Ticker':<{w_sym}}{chg_header:>{w_chg}}{'Rel vol':>{w_rel}}"
     sep = "-" * len(header)
     out = [header, sep]
     for _, row in df.iterrows():
         sym = _symbol_only(row.get(sym_col, ""))
         if len(sym) > w_sym:
             sym = sym[: w_sym - 1] + "…"
-        chg = _fmt_pct(row.get("change"))
+        chg = _fmt_pct(row.get(chg_field))
         relv = _fmt_rel_vol(row.get("relative_volume"))
         out.append(f"{sym:<{w_sym}}{chg:>{w_chg}}{relv:>{w_rel}}")
     return out
@@ -94,7 +105,7 @@ def format_results_telegram_html(run_date: str, results: list[tuple[str, pd.Data
             lines.append("<i>No matches</i>")
         else:
             sym_col = "symbol" if "symbol" in df.columns else "ticker"
-            pre_body = "\n".join(_pre_table_lines(df, sym_col))
+            pre_body = "\n".join(_pre_table_lines(df, sym_col, internal_name=internal_name))
             lines.append(f"<pre>{html.escape(pre_body)}</pre>")
         lines.append("")
 

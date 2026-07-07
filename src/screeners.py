@@ -13,7 +13,7 @@ library's field list, and register it in ``src/run.py``.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -74,24 +74,34 @@ BIG_VOLUME_REL_VOLUME_FIELD: str = "relative_volume"
 # mega‑caps first and can push high‑rel‑vol names like CHYM past ``limit`` even though they match.
 BIG_VOLUME_RESULT_LIMIT: int = 500
 
-# --- "Weekly 20% Gainers" (Fri–Sun only) --------------------------------------
+# --- "Weekly 20% Gainers" (Friday only) ---------------------------------------
 # Market-cap floor (USD): > 300M, same as your TradingView rule.
 WEEKLY_20PCT_MIN_MARKET_CAP_USD: float = 300_000_000
-# Only run this screener Fri–Sun in Central Europe (Prague) time (Mon–Thu → empty, no API call).
+# Calendar for weekday gating (Telegram) and weekly screener (Friday only), Europe/Prague.
 WEEKLY_20PCT_CALENDAR_TZ = ZoneInfo("Europe/Prague")
+# Include weekly performance in API output (Telegram shows ``Perf.W`` as "W Chg %").
+WEEKLY_20PCT_OUTPUT_FIELDS: tuple[str, ...] = STANDARD_SCANNER_OUTPUT_FIELDS + ("Perf.W",)
+
+
+def _prague_calendar_date() -> date:
+    return datetime.now(WEEKLY_20PCT_CALENDAR_TZ).date()
+
+
+def is_weekday_in_prague() -> bool:
+    """True Monday–Friday in ``WEEKLY_20PCT_CALENDAR_TZ`` (Prague)."""
+    return _prague_calendar_date().weekday() < 5
 
 
 def _is_weekly_20pct_screener_active_day() -> bool:
-    """True on Friday, Saturday, or Sunday in ``WEEKLY_20PCT_CALENDAR_TZ`` (Prague)."""
-    cal_date = datetime.now(WEEKLY_20PCT_CALENDAR_TZ).date()
-    return cal_date.weekday() in (4, 5, 6)
+    """True on Friday in ``WEEKLY_20PCT_CALENDAR_TZ`` (Prague)."""
+    return _prague_calendar_date().weekday() == 4
 
 
 def include_screener_in_text_summary(internal_name: str, df: pd.DataFrame) -> bool:
     """
     Whether Telegram / dry-run should show this screener at all (title + body).
 
-    Weekly 20% Gainers is hidden on Mon–Thu Prague when it did not run (empty). On Fri–Sun
+    Weekly 20% Gainers is hidden Mon–Thu Prague when it did not run (empty). On Friday
     it is always shown, including an empty \"No matches\" block after a real query.
     """
     if internal_name != "weekly_20pct_gainers":
@@ -193,9 +203,9 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
 
 def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     """
-    **"Weekly 20% Gainers"** — only queried on **Friday, Saturday, or Sunday** (Europe/Prague).
+    **"Weekly 20% Gainers"** — only queried on **Friday** (Europe/Prague).
 
-    **Monday–Thursday** on that calendar returns an empty DataFrame (no API call). Uses
+    **Monday–Thursday and weekends** on that calendar return an empty DataFrame (no API call). Uses
     ``datetime.now(WEEKLY_20PCT_CALENDAR_TZ)`` so the script uses the **local date in Prague**
     (CET/CEST); you can add a **time-of-day** cutoff if you want stricter behavior.
 
@@ -210,7 +220,7 @@ def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     if not _is_weekly_20pct_screener_active_day():
         now_local = datetime.now(WEEKLY_20PCT_CALENDAR_TZ)
         logger.info(
-            "Screener weekly_20pct_gainers: skipped (runs only Fri–Sun Europe/Prague); now=%s weekday=%s",
+            "Screener weekly_20pct_gainers: skipped (runs only Friday Europe/Prague); now=%s weekday=%s",
             now_local.strftime("%Y-%m-%d %H:%M %Z"),
             now_local.date().weekday(),
         )
@@ -227,7 +237,7 @@ def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     q = (
         Query()
         .set_markets("america")
-        .select(*STANDARD_SCANNER_OUTPUT_FIELDS)
+        .select(*WEEKLY_20PCT_OUTPUT_FIELDS)
         .where(*filters)
         .order_by("Perf.W", ascending=False)
         .limit(_DEFAULT_LIMIT)
