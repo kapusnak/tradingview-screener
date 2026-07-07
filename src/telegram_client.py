@@ -100,7 +100,7 @@ def format_results_telegram_html(run_date: str, results: list[tuple[str, pd.Data
             continue
         total += len(df)
         title = html.escape(screener_display_name(internal_name))
-        lines.append(f"<b>{title}</b>")
+        lines.append(f"<b>{title} ({len(df)})</b>")
         if df.empty:
             lines.append("<i>No matches</i>")
         else:
