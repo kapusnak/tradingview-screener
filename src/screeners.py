@@ -163,7 +163,7 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
       - Market USA → ``america`` only (no ``country`` filter)
       - Price > 5 USD → ``close``
       - Change > 10% → ``change`` > 10 (**percent**; not ``change_abs``)
-      - Revenue Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq``
+      - Revenue Quarterly YoY > 15% → ``total_revenue_yoy_growth_fq``
       - Market cap > 300M USD → ``market_cap_basic``
       - Rel Volume > 1.5 (1 day) → ``relative_volume``
       - EMA(10) > EMA(20) → ``EMA10`` greater than ``EMA20`` (daily; ``col()`` comparison)
@@ -174,7 +174,7 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
     filters = [
         col("close") > 5,
         col("change") > 10,
-        col("total_revenue_qoq_growth_fq") > 15,
+        col("total_revenue_yoy_growth_fq") > 15,
         col("market_cap_basic") > 300_000_000,
         col("relative_volume") > 1.5,
         col("EMA10") > col("EMA20"),
