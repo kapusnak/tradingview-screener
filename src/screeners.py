@@ -265,10 +265,12 @@ def run_strong_fresh_names_screener() -> tuple[str, pd.DataFrame]:
 
     Sort like the screenshot request: ``relative_volume`` descending for the current day.
     """
-    three_years_ago = pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.DateOffset(years=3)
+    three_years_ago = (pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.DateOffset(years=3)).strftime(
+        "%Y-%m-%d"
+    )
     filters = [
         col("change_from_open") > 0,
-        col("IPODate") >= three_years_ago.to_pydatetime(),
+        col("IPODate") >= three_years_ago,
         col("close") > 10,
         col("market_cap_basic") > 2_000_000_000,
         col("total_revenue_yoy_growth_fq") > 19,
