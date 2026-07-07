@@ -114,7 +114,7 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
       - Market USA → ``america`` only (``set_markets("america")``; no ``country`` filter)
       - Price > 5 USD → ``close``
       - Change > 0% → ``change`` (**percent**, not dollars; see module note)
-      - Revenue, Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq``
+      - Revenue, Quarterly YoY > 15% → ``total_revenue_yoy_growth_fq``
       - “Price × Average Volume 30 days” > 100M USD → ``AvgValue.Traded_30d``
         (TradingView’s 30D average **dollar** value traded; closest scanner field to
         that tooltip)
@@ -136,7 +136,7 @@ def run_big_volume_screener() -> tuple[str, pd.DataFrame]:
         col("close") > 5,
         col("change") > 0,
         col("market_cap_basic") > 300_000_000,
-        col("total_revenue_qoq_growth_fq") > 15,
+        col("total_revenue_yoy_growth_fq") > 15,
         col("AvgValue.Traded_30d") > 100_000_000,
         col(rel_field) > 2.5,
         col("volume_change") > 30,
