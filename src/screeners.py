@@ -253,7 +253,7 @@ def run_strong_fresh_names_screener() -> tuple[str, pd.DataFrame]:
     UI → API:
       - Market USA → ``america`` only (no ``country`` filter)
       - Chg from open > 0% → ``change_from_open`` > 0
-      - IPO offer date Past 3 years → ``IPODate`` within the last 3 years
+      - IPO offer date Past 3 years → ``ipo_offer_date`` (Unix seconds) within the last 3 years
       - Price > 10 USD → ``close`` > 10
       - Market cap > 2B USD → ``market_cap_basic`` > 2_000_000_000
       - Revenue growth, Quarterly YoY > 19% → ``total_revenue_yoy_growth_fq`` > 19
@@ -265,12 +265,12 @@ def run_strong_fresh_names_screener() -> tuple[str, pd.DataFrame]:
 
     Sort like the screenshot request: ``relative_volume`` descending for the current day.
     """
-    three_years_ago = (pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.DateOffset(years=3)).strftime(
-        "%Y-%m-%d"
+    three_years_ago_ts = int(
+        (pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.DateOffset(years=3)).timestamp()
     )
     filters = [
         col("change_from_open") > 0,
-        col("IPODate") >= three_years_ago,
+        col("ipo_offer_date") >= three_years_ago_ts,
         col("close") > 10,
         col("market_cap_basic") > 2_000_000_000,
         col("total_revenue_yoy_growth_fq") > 19,
