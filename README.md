@@ -9,7 +9,7 @@ Small Python service: run TradingView scanner queries, then send results to **Go
 What happens instead:
 
 - Each “screener” in this repo is a **Python function** in [`src/screeners.py`](src/screeners.py) that builds a **`Query()`** (market, `.where(...)` filters, `.select(...)` columns, `.order_by`, `.limit`).
-- This project includes **Big Volume**, **10% Up**, **Weekly 20% Gainers**, and **Strong Fresh Names**, defined in code to mirror your TradingView rules (still not loaded from the website).
+- This project includes **Big Volume**, **10% Up**, **Weekly Gainer**, and **Strong Fresh Names**, defined in code to mirror your TradingView rules (still not loaded from the website).
 
 **How to add or tweak a screener:**
 
@@ -93,7 +93,7 @@ Full list with placeholders: [.env.example](.env.example).
 
 1. Create a **new project** and deploy using the repo root (Dockerfile builds the app and runs `python -m src.run`).
 2. In **Variables**, add the secrets you use (e.g. Telegram only: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`). For Google, paste the full JSON into `GOOGLE_SERVICE_ACCOUNT_JSON`.
-3. Add a **Cron** service or scheduled job (per Railway’s current UI): same image, start command **`python -m src.run`** (already the Dockerfile `CMD`; override only if you use a different entry). Schedule e.g. **weekdays** (`0 22 * * 1-5` in UTC — adjust hour to your preference) so the job does not run on weekends; Telegram is also skipped Sat–Sun in code (Europe/Prague), and **Weekly 20% Gainers** runs **Friday only**.
+3. Add a **Cron** service or scheduled job (per Railway’s current UI): same image, start command **`python -m src.run`** (already the Dockerfile `CMD`; override only if you use a different entry). Schedule e.g. **weekdays** (`0 22 * * 1-5` in UTC — adjust hour to your preference) so the job does not run on weekends; Telegram is also skipped Sat–Sun in code (Europe/Prague), and **Weekly Gainer** runs **Friday only**.
 4. Optional: set `DRY_RUN=1` once to verify the container starts without writing to any output channel.
 
 ## Troubleshooting

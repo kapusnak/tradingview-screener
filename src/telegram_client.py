@@ -25,7 +25,7 @@ _MAX_MESSAGE_CHARS = 4000
 SCREENER_DISPLAY_NAMES: dict[str, str] = {
     "big_volume": "Big Volume",
     "10pct_up": "10% Up",
-    "weekly_20pct_gainers": "Weekly 20% Gainers",
+    "weekly_20pct_gainers": "Weekly Gainer",
     "strong_fresh_names": "Strong Fresh Names",
 }
 

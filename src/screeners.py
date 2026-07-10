@@ -74,9 +74,13 @@ BIG_VOLUME_REL_VOLUME_FIELD: str = "relative_volume"
 # mega‑caps first and can push high‑rel‑vol names like CHYM past ``limit`` even though they match.
 BIG_VOLUME_RESULT_LIMIT: int = 500
 
-# --- "Weekly 20% Gainers" (Friday only) ---------------------------------------
+# --- "Weekly Gainer" (Friday only) --------------------------------------------
 # Market-cap floor (USD): > 300M, same as your TradingView rule.
 WEEKLY_20PCT_MIN_MARKET_CAP_USD: float = 300_000_000
+# Price × avg vol 30D floor (USD): > 50M.
+WEEKLY_MIN_AVG_VALUE_TRADED_30D_USD: float = 50_000_000
+# 1-week performance floor (percent): > 30%.
+WEEKLY_MIN_PERF_W_PCT: float = 30
 # Calendar for weekday gating (Telegram) and weekly screener (Friday only), Europe/Prague.
 WEEKLY_20PCT_CALENDAR_TZ = ZoneInfo("Europe/Prague")
 # Include weekly performance in API output (Telegram shows ``Perf.W`` as "W Chg %").
@@ -101,7 +105,7 @@ def include_screener_in_text_summary(internal_name: str, df: pd.DataFrame) -> bo
     """
     Whether Telegram / dry-run should show this screener at all (title + body).
 
-    Weekly 20% Gainers is hidden Mon–Thu Prague when it did not run (empty). On Friday
+    Weekly Gainer is hidden Mon–Thu Prague when it did not run (empty). On Friday
     it is always shown, including an empty \"No matches\" block after a real query.
     """
     if internal_name != "weekly_20pct_gainers":
@@ -203,19 +207,18 @@ def run_ten_percent_up_screener() -> tuple[str, pd.DataFrame]:
 
 def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
     """
-    **"Weekly 20% Gainers"** — only queried on **Friday** (Europe/Prague).
+    **"Weekly Gainer"** — only queried on **Friday** (Europe/Prague).
 
     **Monday–Thursday and weekends** on that calendar return an empty DataFrame (no API call). Uses
     ``datetime.now(WEEKLY_20PCT_CALENDAR_TZ)`` so the script uses the **local date in Prague**
     (CET/CEST); you can add a **time-of-day** cutoff if you want stricter behavior.
 
-    UI → API (aligned with your liquidity / fundamental filters; weekly performance is ``Perf.W``):
+    UI → API (weekly performance is ``Perf.W``):
       - Market USA → ``america`` only (no ``country`` filter)
-      - Price ≥ 5 USD → ``close`` >= 5
-      - Price × Average Volume 30 days > 100M USD → ``AvgValue.Traded_30d`` > 100M
+      - Price > 5 USD → ``close`` > 5
+      - Price × Average Volume 30 days > 50M USD → ``AvgValue.Traded_30d`` > 50M
       - Market cap > 300M USD → ``market_cap_basic`` > ``WEEKLY_20PCT_MIN_MARKET_CAP_USD`` (300M)
-      - Revenue growth Quarterly QoQ > 15% → ``total_revenue_qoq_growth_fq`` > 15
-      - Performance % 1 week > 20% → ``Perf.W`` > 20
+      - Chg % 1 week > 30% → ``Perf.W`` > 30
     """
     if not _is_weekly_20pct_screener_active_day():
         now_local = datetime.now(WEEKLY_20PCT_CALENDAR_TZ)
@@ -228,11 +231,10 @@ def run_weekly_20pct_gainers_screener() -> tuple[str, pd.DataFrame]:
 
     mc_min = WEEKLY_20PCT_MIN_MARKET_CAP_USD
     filters = [
-        col("close") >= 5,
-        col("AvgValue.Traded_30d") > 100_000_000,
+        col("close") > 5,
+        col("AvgValue.Traded_30d") > WEEKLY_MIN_AVG_VALUE_TRADED_30D_USD,
         col("market_cap_basic") > mc_min,
-        col("total_revenue_qoq_growth_fq") > 15,
-        col("Perf.W") > 20,
+        col("Perf.W") > WEEKLY_MIN_PERF_W_PCT,
     ]
     q = (
         Query()
