@@ -27,6 +27,17 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_presence(name: str) -> str:
+    """Describe whether an env var is missing, empty, or set (length only, no secrets)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return "missing"
+    trimmed = raw.strip()
+    if not trimmed:
+        return "empty"
+    return f"set ({len(trimmed)} chars)"
+
+
 def _optional_json(name: str) -> Optional[Any]:
     raw = os.environ.get(name, "").strip()
     if not raw:
@@ -155,7 +166,13 @@ def load_settings(*, for_real_run: bool) -> Settings:
         raise ValueError(
             "Configure at least one output for a real run: "
             "Google Sheets (GOOGLE_SHEETS_ID + service account JSON or key path), "
-            "email (SMTP vars), or Telegram (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)."
+            "email (SMTP vars), or Telegram (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID). "
+            "Env at runtime — "
+            f"TELEGRAM_BOT_TOKEN: {_env_presence('TELEGRAM_BOT_TOKEN')}, "
+            f"TELEGRAM_CHAT_ID: {_env_presence('TELEGRAM_CHAT_ID')}, "
+            f"GOOGLE_SHEETS_ID: {_env_presence('GOOGLE_SHEETS_ID')}. "
+            "If Railway Variables look correct, redeploy the service after saving them "
+            "(staged variable edits are not applied until deploy)."
         )
 
     return Settings(
