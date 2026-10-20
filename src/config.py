@@ -188,3 +188,21 @@ def load_settings(*, for_real_run: bool) -> Settings:
         log_level=log_level,
         dry_run_env=dry_run_env,
     )
+
+
+def load_morning_settings(*, for_real_run: bool) -> Settings:
+    """
+    Morning StockCharts job: Telegram only. Does not require Sheets or email.
+
+    Reuses TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID. Leaves evening-screener validation
+    (``load_settings``) unchanged.
+    """
+    settings = load_settings(for_real_run=False)
+    if for_real_run and settings.telegram is None:
+        raise ValueError(
+            "Morning charts require TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. "
+            "Env at runtime — "
+            f"TELEGRAM_BOT_TOKEN: {_env_presence('TELEGRAM_BOT_TOKEN')}, "
+            f"TELEGRAM_CHAT_ID: {_env_presence('TELEGRAM_CHAT_ID')}."
+        )
+    return settings
