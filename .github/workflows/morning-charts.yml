@@ -1,0 +1,45 @@
+# Weekday 08:15 Europe/Prague: send $NASI and $VIX StockCharts PNGs to Telegram.
+# GitHub Actions cron is UTC, so two weekdays schedules cover CET and CEST.
+# python -m src.morning_run no-ops unless local Prague time is Mon–Fri 08:00–08:59.
+name: Morning StockCharts
+
+on:
+  schedule:
+    # 08:15 CEST (UTC+2) Monday–Friday
+    - cron: "15 6 * * 1-5"
+    # 08:15 CET (UTC+1) Monday–Friday
+    - cron: "15 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch PNGs only; do not send to Telegram"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  send-charts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e .
+      - name: Send morning charts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            args+=(--force)
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              args+=(--dry-run)
+            fi
+          fi
+          python -m src.morning_run "${args[@]}"

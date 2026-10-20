@@ -1,13 +1,15 @@
-"""Send screener summaries via Telegram Bot API (no extra dependencies)."""
+"""Send screener summaries and chart documents via Telegram Bot API (no extra dependencies)."""
 
 from __future__ import annotations
 
 import html
 import json
 import logging
+import uuid
 import urllib.error
 import urllib.request
-from typing import TYPE_CHECKING, List
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Sequence
 
 import pandas as pd
 
@@ -173,3 +175,133 @@ def send_screener_summary(
             err_body = e.read().decode("utf-8", errors="replace")
             logger.error("Telegram API HTTP %s: %s", e.code, err_body)
             raise
+
+
+@dataclass(frozen=True)
+class TelegramDocument:
+    """PNG (or other file) sent via sendDocument so Telegram does not recompress it."""
+
+    filename: str
+    data: bytes
+    caption: str
+
+
+def _multipart_body(
+    fields: dict[str, str],
+    files: Sequence[tuple[str, str, bytes, str]],
+) -> tuple[bytes, str]:
+    """Encode ``multipart/form-data``. ``files`` is (field, filename, bytes, content_type)."""
+    boundary = uuid.uuid4().hex
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode("utf-8")
+        )
+    for field_name, filename, data, content_type in files:
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(
+            (
+                f'Content-Disposition: form-data; name="{field_name}"; '
+                f'filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        chunks.append(data)
+        chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
+
+
+def _post_telegram_form(
+    *,
+    bot_token: str,
+    method: str,
+    fields: dict[str, str],
+    files: Sequence[tuple[str, str, bytes, str]],
+    timeout: int = 90,
+) -> None:
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+    body, content_type = _multipart_body(fields, files)
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": content_type},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        logger.error("Telegram API HTTP %s on %s: %s", e.code, method, err_body)
+        raise
+
+
+def send_document(
+    *,
+    telegram: "TelegramSettings",
+    document: TelegramDocument,
+) -> None:
+    """POST sendDocument with an uploaded PNG (original pixels, no JPEG recompress)."""
+    _post_telegram_form(
+        bot_token=telegram.bot_token,
+        method="sendDocument",
+        fields={
+            "chat_id": telegram.chat_id,
+            "caption": document.caption,
+        },
+        files=[("document", document.filename, document.data, "image/png")],
+    )
+    logger.info("Telegram document sent (%s, %s bytes)", document.filename, len(document.data))
+
+
+def send_document_media_group(
+    *,
+    telegram: "TelegramSettings",
+    documents: Sequence[TelegramDocument],
+) -> None:
+    """POST sendMediaGroup of documents so both charts arrive together, uncompressed."""
+    if len(documents) < 2:
+        raise ValueError("sendMediaGroup needs at least two documents")
+    files: list[tuple[str, str, bytes, str]] = []
+    media: list[dict[str, str]] = []
+    for i, document in enumerate(documents):
+        attach = f"chart{i}"
+        files.append((attach, document.filename, document.data, "image/png"))
+        media.append(
+            {
+                "type": "document",
+                "media": f"attach://{attach}",
+                "caption": document.caption,
+            }
+        )
+    _post_telegram_form(
+        bot_token=telegram.bot_token,
+        method="sendMediaGroup",
+        fields={
+            "chat_id": telegram.chat_id,
+            "media": json.dumps(media),
+        },
+        files=files,
+    )
+    logger.info("Telegram document media group sent (%s files)", len(documents))
+
+
+def send_chart_documents(
+    *,
+    telegram: "TelegramSettings",
+    documents: Sequence[TelegramDocument],
+) -> None:
+    """Send chart PNGs only (no extra text, no sendPhoto). Album first; sendDocument fallback."""
+    if not documents:
+        raise ValueError("no documents to send")
+    if len(documents) == 1:
+        send_document(telegram=telegram, document=documents[0])
+        return
+    try:
+        send_document_media_group(telegram=telegram, documents=documents)
+    except urllib.error.HTTPError:
+        logger.warning("sendMediaGroup(document) failed; sending each chart with sendDocument")
+        for document in documents:
+            send_document(telegram=telegram, document=document)
