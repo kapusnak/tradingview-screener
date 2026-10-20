@@ -63,3 +63,14 @@ def test_force_overrides_weekend_and_hour() -> None:
 def test_naive_datetime_treated_as_utc() -> None:
     ok, reason = should_send_morning_charts(datetime(2026, 1, 16, 7, 15))
     assert ok, reason
+
+
+def test_main_skips_without_telegram_env_when_outside_window(monkeypatch) -> None:
+    from src import morning_run
+
+    monkeypatch.setattr(
+        morning_run,
+        "should_send_morning_charts",
+        lambda now, force=False: (False, "weekend in Europe/Prague"),
+    )
+    assert morning_run.main([]) == 0

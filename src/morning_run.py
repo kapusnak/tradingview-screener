@@ -86,14 +86,16 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     dry_run = bool(args.dry_run or dry_run_from_environment())
     force = bool(args.force or _env_flag("MORNING_FORCE"))
-    settings = load_morning_settings(for_real_run=not dry_run)
-    _configure_logging(settings.log_level)
+    _configure_logging("INFO")
 
     now = datetime.now(timezone.utc)
     send, reason = should_send_morning_charts(now, force=force)
     if not send:
         logger.info("Morning charts skipped: %s", reason)
         return 0
+
+    settings = load_morning_settings(for_real_run=not dry_run)
+    _configure_logging(settings.log_level)
     logger.info("Morning charts starting: %s dry_run=%s", reason, dry_run)
 
     try:
