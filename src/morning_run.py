@@ -1,8 +1,9 @@
-"""Weekday morning job: StockCharts $NASI + $VIX PNGs → Telegram.
+"""Weekday morning job: $NASI + $VIX + QQQ chart PNGs → Telegram.
 
 Separate from the evening TradingView scanner (``python -m src.run``). Sends only
-two PNG documents, nothing else. Schedule: Monday–Friday 08:15 Europe/Prague
-(DST-safe via two UTC crons + a local-time guard). Weekends are a no-op.
+three PNG documents, nothing else. Schedule: Monday–Friday 08:15 Europe/Prague
+(DST-safe via Railway cron ``15 6,7 * * 1-5`` UTC plus a local-time guard).
+Weekends are a no-op. The process always exits (Railway cron requirement).
 """
 
 from __future__ import annotations
@@ -37,11 +38,11 @@ def should_send_morning_charts(now: datetime, *, force: bool = False) -> tuple[b
     """
     Whether this run should send charts.
 
-    UTC cron fires twice on weekdays (06:15 and 07:15 UTC) so 08:15 Prague is hit
-    in both CET and CEST. This guard:
+    Railway cron ``15 6,7 * * 1-5`` fires twice on weekdays (06:15 and 07:15 UTC)
+    so 08:15 Prague is hit in both CET and CEST. This guard:
     - skips Saturday and Sunday in Europe/Prague entirely
     - skips the DST slot that is not 08:xx Prague
-    ``force`` is for manual ``workflow_dispatch`` / local tests only.
+    ``force`` is for local tests only.
     """
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
@@ -70,7 +71,7 @@ def _configure_logging(level_name: str) -> None:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Send $NASI and $VIX StockCharts PNGs to Telegram (weekday mornings)",
+        description="Send $NASI, $VIX, and QQQ chart PNGs to Telegram (weekday mornings)",
     )
     parser.add_argument(
         "--dry-run",

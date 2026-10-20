@@ -261,7 +261,7 @@ def send_document_media_group(
     telegram: "TelegramSettings",
     documents: Sequence[TelegramDocument],
 ) -> None:
-    """POST sendMediaGroup of documents so both charts arrive together, uncompressed."""
+    """POST sendMediaGroup of documents so the charts arrive together, uncompressed."""
     if len(documents) < 2:
         raise ValueError("sendMediaGroup needs at least two documents")
     files: list[tuple[str, str, bytes, str]] = []

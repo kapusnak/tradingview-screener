@@ -23,8 +23,7 @@ def test_send_chart_documents_uses_document_media_group(monkeypatch) -> None:
     def fake_post(*, bot_token, method, fields, files, timeout=90):
         calls.append((method, fields))
         assert bot_token == "tok"
-        assert files[0][1].endswith(".png")
-        assert files[1][1].endswith(".png")
+        assert [f[1] for f in files] == ["NASI.png", "VIX.png", "QQQ.png"]
 
     monkeypatch.setattr("src.telegram_client._post_telegram_form", fake_post)
 
@@ -35,13 +34,13 @@ def test_send_chart_documents_uses_document_media_group(monkeypatch) -> None:
     send_chart_documents(
         telegram=T(),  # type: ignore[arg-type]
         documents=(
-            TelegramDocument("nasi.png", b"aaa", "$NASI"),
-            TelegramDocument("vix.png", b"bbb", "$VIX"),
+            TelegramDocument("NASI.png", b"aaa", "$NASI"),
+            TelegramDocument("VIX.png", b"bbb", "$VIX"),
+            TelegramDocument("QQQ.png", b"ccc", "QQQ"),
         ),
     )
     assert calls[0][0] == "sendMediaGroup"
     media = calls[0][1]["media"]
     assert '"type": "document"' in media
-    assert "$NASI" in media
-    assert "$VIX" in media
+    assert media.index("$NASI") < media.index("$VIX") < media.index("QQQ")
     assert "sendPhoto" not in calls[0][0]
