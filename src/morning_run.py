@@ -1,8 +1,8 @@
 """Weekday morning job: $NASI + $VIX + QQQ chart PNGs → Telegram.
 
 Separate from the evening TradingView scanner (``python -m src.run``). Sends only
-three PNG documents, nothing else. Schedule: Monday–Friday 08:15 Europe/Prague
-(DST-safe via Railway cron ``15 6,7 * * 1-5`` UTC plus a local-time guard).
+three PNG documents, nothing else. Schedule: Monday–Friday 07:00 Europe/Prague
+(DST-safe via Railway cron ``0 5,6 * * 1-5`` UTC plus a local-time guard).
 Weekends are a no-op. The process always exits (Railway cron requirement).
 """
 
@@ -23,8 +23,8 @@ from src.telegram_client import TelegramDocument, send_chart_documents
 logger = logging.getLogger(__name__)
 
 PRAGUE_TZ = ZoneInfo("Europe/Prague")
-# 08:00–08:59 Prague: covers 08:15 plus typical scheduler delay.
-TARGET_HOUR = 8
+# 07:00–07:59 Prague: covers 07:00 plus typical scheduler delay.
+TARGET_HOUR = 7
 
 
 def _env_flag(name: str) -> bool:
@@ -38,10 +38,10 @@ def should_send_morning_charts(now: datetime, *, force: bool = False) -> tuple[b
     """
     Whether this run should send charts.
 
-    Railway cron ``15 6,7 * * 1-5`` fires twice on weekdays (06:15 and 07:15 UTC)
-    so 08:15 Prague is hit in both CET and CEST. This guard:
+    Railway cron ``0 5,6 * * 1-5`` fires twice on weekdays (05:00 and 06:00 UTC)
+    so 07:00 Prague is hit in both CET and CEST. This guard:
     - skips Saturday and Sunday in Europe/Prague entirely
-    - skips the DST slot that is not 08:xx Prague
+    - skips the DST slot that is not 07:xx Prague
     ``force`` is for local tests only.
     """
     if now.tzinfo is None:
@@ -54,7 +54,7 @@ def should_send_morning_charts(now: datetime, *, force: bool = False) -> tuple[b
         return False, f"weekend in Europe/Prague ({stamp}); no morning charts"
     if local.hour != TARGET_HOUR:
         return False, (
-            f"outside 08:00–08:59 Europe/Prague ({stamp}); other DST cron slot"
+            f"outside 07:00–07:59 Europe/Prague ({stamp}); other DST cron slot"
         )
     return True, f"weekday morning window ({stamp})"
 
@@ -81,7 +81,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Ignore the Mon–Fri 08:15 Europe/Prague window (manual tests)",
+        help="Ignore the Mon–Fri 07:00 Europe/Prague window (manual tests)",
     )
     args = parser.parse_args(argv)
 
