@@ -57,7 +57,7 @@ Dry run (no Sheets, email, or Telegram):
 python -m src.run --dry-run
 ```
 
-Morning StockCharts job (fetch two PNGs; `--force` skips the 08:15 weekday window):
+Morning StockCharts job (fetch two PNGs; `--force` skips the 07:00 weekday window):
 
 ```bash
 python -m src.morning_run --dry-run --force
@@ -81,7 +81,7 @@ The morning chart job uses the **same** `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_
 
 ## Morning charts ($NASI + $VIX + QQQ)
 
-Every **Monday–Friday at 08:15 Europe/Prague**, a second Railway cron fetches three chart images and sends **only those files** to the same Telegram chat (tiny captions `$NASI`, `$VIX`, `QQQ`), as one document album in that order. Saturday and Sunday: **no message**. Charts show the previous US session’s close (Monday morning → Friday’s close).
+Every **Monday–Friday at 07:00 Europe/Prague**, a second Railway cron fetches three chart images and sends **only those files** to the same Telegram chat (tiny captions `$NASI`, `$VIX`, `QQQ`), as one document album in that order. Saturday and Sunday: **no message**. Charts show the previous US session’s close (Monday morning → Friday’s close).
 
 This job does **not** change the evening TradingView scanner. There is **no GitHub Actions schedule** for it (no GitHub secrets to add).
 
@@ -102,7 +102,7 @@ python -m src.morning_run --dry-run --force   # fetch + print sizes, no Telegram
 python -m src.morning_run --force             # send now (needs Telegram env)
 ```
 
-Without `--force`, the process exits 0 unless it is **Mon–Fri 08:00–08:59** in Europe/Prague. Either way the process **exits** when finished (required for Railway cron).
+Without `--force`, the process exits 0 unless it is **Mon–Fri 07:00–07:59** in Europe/Prague. Either way the process **exits** when finished (required for Railway cron).
 
 ### Railway setup (one extra cron service)
 
@@ -114,18 +114,18 @@ Do **not** change the existing evening service. Its Dockerfile `CMD` stays `pyth
    ```text
    python -m src.morning_run
    ```
-4. Set its **cron schedule** to this single UTC expression (weekdays, two hours so CET and CEST both hit 08:15 Prague):
+4. Set its **cron schedule** to this single UTC expression (weekdays, two hours so CET and CEST both hit 07:00 Prague):
    ```text
-   15 6,7 * * 1-5
+   0 5,6 * * 1-5
    ```
    | Slot | UTC | Prague |
    | --- | --- | --- |
-   | CEST (UTC+2) | 06:15 | 08:15 Mon–Fri |
-   | CET (UTC+1) | 07:15 | 08:15 Mon–Fri |
+   | CEST (UTC+2) | 05:00 | 07:00 Mon–Fri |
+   | CET (UTC+1) | 06:00 | 07:00 Mon–Fri |
 5. Leave the evening service’s start command and schedule as they are.
 6. Optional check: on the morning service, run a one-off with `python -m src.morning_run --force` (or set `MORNING_FORCE=1` for that one deploy). Confirm three PNG documents arrive, then remove the force flag.
 
-The Python job **no-ops** (exit 0, no Telegram) when it is Saturday or Sunday in Europe/Prague, or when local Prague time is not 08:00–08:59 (the extra DST slot). So only one of the two UTC firings sends.
+The Python job **no-ops** (exit 0, no Telegram) when it is Saturday or Sunday in Europe/Prague, or when local Prague time is not 07:00–07:59 (the extra DST slot). So only one of the two UTC firings sends.
 
 ## Environment variables
 
@@ -153,7 +153,7 @@ Full list with placeholders: [.env.example](.env.example).
 2. In **Variables**, add the secrets you use (e.g. Telegram only: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`). For Google, paste the full JSON into `GOOGLE_SERVICE_ACCOUNT_JSON`.
 3. Add a **Cron** service or scheduled job (per Railway’s current UI): same image, start command **`python -m src.run`** (already the Dockerfile `CMD`; override only if you use a different entry). Schedule e.g. **weekdays** (`0 22 * * 1-5` in UTC — adjust hour to your preference) so the job does not run on weekends; Telegram is also skipped Sat–Sun in code (Europe/Prague), and **Weekly Gainer** runs **Friday only**.
 4. Optional: set `DRY_RUN=1` once to verify the container starts without writing to any output channel.
-5. For the **morning charts**, follow [Morning charts](#morning-charts-nasi--vix--qqq): add **one** extra Cron service with start command **`python -m src.morning_run`** and schedule **`15 6,7 * * 1-5`**. Do not change the evening service.
+5. For the **morning charts**, follow [Morning charts](#morning-charts-nasi--vix--qqq): add **one** extra Cron service with start command **`python -m src.morning_run`** and schedule **`0 5,6 * * 1-5`**. Do not change the evening service.
 
 ## Troubleshooting
 
